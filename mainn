@@ -1,0 +1,106 @@
+#include <cassert>
+#include <cstdint>
+#include <iostream>
+#include <numeric>
+#include <vector>
+#include <list>
+#include <utility>
+
+using namespace std;
+
+template <typename RandomIt>
+void MakeJosephusPermutation(RandomIt first, RandomIt last, uint32_t step_size) {
+    // Создаём список из элементов диапазона с перемещением
+    list<typename RandomIt::value_type> pool;
+    for (auto it = first; it != last; ++it) {
+        pool.push_back(move(*it));
+    }
+
+    auto current = pool.begin();
+    while (!pool.empty()) {
+        // Перемещаем текущий элемент в результирующую позицию
+        *(first++) = move(*current);
+        
+        // Удаляем элемент из списка и получаем следующий итератор
+        current = pool.erase(current);
+        if (pool.empty()) break;
+        
+        // Перемещаемся на step_size-1 позиций вперед
+        for (uint32_t i = 0; i < step_size - 1; ++i) {
+            if (current == pool.end()) current = pool.begin();
+            ++current;
+            if (current == pool.end()) current = pool.begin();
+        }
+    }
+}
+
+vector<int> MakeTestVector() {
+    vector<int> numbers(10);
+    iota(begin(numbers), end(numbers), 0);
+    return numbers;
+}
+
+void TestIntVector() {
+    const vector<int> numbers = MakeTestVector();
+    {
+        vector<int> numbers_copy = numbers;
+        MakeJosephusPermutation(begin(numbers_copy), end(numbers_copy), 1);
+        assert(numbers_copy == numbers);
+    }
+    {
+        vector<int> numbers_copy = numbers;
+        MakeJosephusPermutation(begin(numbers_copy), end(numbers_copy), 3);
+        assert(numbers_copy == vector<int>({0, 3, 6, 9, 4, 8, 5, 2, 7, 1}));
+    }
+}
+
+struct NoncopyableInt {
+    int value;
+    
+    NoncopyableInt(int value) : value(value) {}
+    NoncopyableInt(const NoncopyableInt&) = delete;
+    NoncopyableInt& operator=(const NoncopyableInt&) = delete;
+    
+    NoncopyableInt(NoncopyableInt&&) = default;
+    NoncopyableInt& operator=(NoncopyableInt&&) = default;
+};
+
+bool operator==(const NoncopyableInt& lhs, const NoncopyableInt& rhs) {
+    return lhs.value == rhs.value;
+}
+
+ostream& operator<<(ostream& os, const NoncopyableInt& v) {
+    return os << v.value;
+}
+
+void TestNoCopying() {
+    vector<NoncopyableInt> numbers;
+    numbers.emplace_back(1);
+    numbers.emplace_back(2);
+    numbers.emplace_back(3);
+    numbers.emplace_back(4);
+    numbers.emplace_back(5);
+
+    MakeJosephusPermutation(begin(numbers), end(numbers), 2);
+
+    vector<NoncopyableInt> expected;
+    expected.emplace_back(1);
+    expected.emplace_back(3);
+    expected.emplace_back(5);
+    expected.emplace_back(4);
+    expected.emplace_back(2);
+
+    assert(numbers == expected);
+}
+
+int main() {
+    TestIntVector();
+    TestNoCopying();
+    
+    // Дополнительный тест для проверки производительности
+    vector<int> large_vec(100000);
+    iota(begin(large_vec), end(large_vec), 0);
+    MakeJosephusPermutation(begin(large_vec), end(large_vec), 7);
+    
+    return 0;
+}
