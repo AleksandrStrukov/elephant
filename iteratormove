@@ -1,0 +1,89 @@
+#include <algorithm>
+#include <cassert>
+#include <string>
+#include <vector>
+#include <iterator>
+
+using namespace std;
+
+template <typename Token>
+using Sentence = vector<Token>;
+
+template <typename TokenForwardIt>
+TokenForwardIt FindSentenceEnd(TokenForwardIt tokens_begin, TokenForwardIt tokens_end) {
+    const TokenForwardIt before_sentence_end
+        = adjacent_find(tokens_begin, tokens_end, [](const auto& left_token, const auto& right_token) {
+              return left_token.IsEndSentencePunctuation() && !right_token.IsEndSentencePunctuation();
+          });
+    return before_sentence_end == tokens_end ? tokens_end : next(before_sentence_end);
+}
+
+template <typename Token>
+vector<Sentence<Token>> SplitIntoSentences(vector<Token> tokens) {
+    vector<Sentence<Token>> sentences;
+    auto it = tokens.begin();
+    const auto end = tokens.end();
+    
+    while (it != end) {
+        const auto sentence_end = FindSentenceEnd(it, end);
+        sentences.emplace_back(make_move_iterator(it), make_move_iterator(sentence_end));
+        it = sentence_end;
+    }
+    
+    return sentences;
+}
+
+struct TestToken {
+    string data;
+    bool is_end_sentence_punctuation = false;
+
+    bool IsEndSentencePunctuation() const {
+        return is_end_sentence_punctuation;
+    }
+    bool operator==(const TestToken& other) const {
+        return data == other.data && is_end_sentence_punctuation == other.is_end_sentence_punctuation;
+    }
+};
+
+struct TestNoCopyToken : TestToken {
+    TestNoCopyToken() = default;
+    TestNoCopyToken(string data, bool is_punct) {
+        this->data = data;
+        this->is_end_sentence_punctuation = is_punct;
+    }
+    TestNoCopyToken(const TestNoCopyToken&) = delete;
+    TestNoCopyToken(TestNoCopyToken&&) = default;
+    TestNoCopyToken& operator=(const TestNoCopyToken&) = delete;
+    TestNoCopyToken& operator=(TestNoCopyToken&&) = default;
+};
+
+ostream& operator<<(ostream& stream, const TestToken& token) {
+    return stream << token.data;
+}
+
+void TestSplitting() {
+    assert(SplitIntoSentences(vector<TestToken>({{"Split"s}, {"into"s}, {"sentences"s}, {"!"s}}))
+           == vector<Sentence<TestToken>>({{{"Split"s}, {"into"s}, {"sentences"s}, {"!"s}}}));
+
+    assert(SplitIntoSentences(vector<TestToken>({{"Split"s}, {"into"s}, {"sentences"s}, {"!"s, true}}))
+           == vector<Sentence<TestToken>>({{{"Split"s}, {"into"s}, {"sentences"s}, {"!"s, true}}}));
+
+    assert(SplitIntoSentences(vector<TestToken>(
+               {{"Split"s}, {"into"s}, {"sentences"s}, {"!"s, true}, {"!"s, true}, {"Without"s}, {"copies"s}, {"."s, true}}))
+           == vector<Sentence<TestToken>>({
+               {{"Split"s}, {"into"s}, {"sentences"s}, {"!"s, true}, {"!"s, true}},
+               {{"Without"s}, {"copies"s}, {"."s, true}},
+           }));
+}
+
+void TestNoCopy() {
+    vector<TestNoCopyToken> tokens;
+    tokens.emplace_back("Test"s, true);
+    const auto sentences = SplitIntoSentences(move(tokens));
+    assert(sentences.size() == 1 && sentences[0].size() == 1);
+}
+
+int main() {
+    TestSplitting();
+    TestNoCopy();
+}
